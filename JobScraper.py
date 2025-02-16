@@ -34,164 +34,195 @@ def create_table(frame, data):
             label = ctk.CTkLabel(frame, text=value, font=("Arial", 12))
             label.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
 
+user_inputs = {"Region": "", "City": ""}
+
 def submit():
-    print("put something here")
-
-# FurgeDiak
-
-fg_url = "https://www.furgediak.hu/furgediak-backings/methods/jobAdvertisementControl/findJobAdvertisementByParameter"
-settlement_url = "https://www.furgediak.hu/furgediak-backings/methods/employeeUserControl/getComboData"
-
-settlement_payload = {
-    "comboNames": {
-        "types": [
-            "staticJobArea", "jobArea", "country", "county", "settlement","office", "typesOfRoad", "specialization", "language", "skill","countryCode", "serviceProviderNumber", "mekiSettlement","mekiCounty", "mekiOffice"
-        ]
-    }
-}
-
-headers = {
-    "Referer": "https://www.furgediak.hu/diakmunka"
-}
-
-settlement_response = requests.post(settlement_url, headers=headers, json=settlement_payload)
-
-if settlement_response.status_code == 200:
-    print("Success")
-    settlement_data = settlement_response.json()
-    
-    def get_city_id(settlement_name, json_data):
-        for settlement in json_data.get("settlement", []):
-            slug_city = slugify(settlement.get("name", ""))
-            if slug_city == slugify(settlement_name):
-                return {
-                    "id": settlement.get("id"),
-                    "city": settlement.get("name")
-                }
-        return None
-    settlement_return = get_city_id("Budapest", settlement_data)
-
-job_payload = {
-    "countyId": None,
-    "jobAreaId": None,
-    "keys": None,  
-    "newJobAdvertisement": False,  
-    "settlementId": settlement_return["id"],  
-    "staticJobAreaId": None,  
-    "younger18": False
-}
-
-fg_response = requests.post(fg_url, headers=headers, json=job_payload)
+    user_inputs["Region"] = slugify(region_entry.get())
+    user_inputs["City"] = slugify(city_entry.get())
+    fetch_jobs()
+    create_table(job_frame,job_listings)
 
 job_listings = []
 
-if fg_response.status_code == 200:
-    print("Success!")
-    job_data = fg_response.json()
-    for job in job_data:
-        title = job.get("positionName", "N/A")
-        city = job.get("settlementName", "N/A")
-        payment = job.get("grossSalaryPay", "N/A")
-        job_listings.append({
-            "Job Title": title,
-            "City": city,
-            "Payment": payment,})
-else:
-    print(f"Failed with status code {fg_response.status_code}")
+def get_city_id(settlement_name, json_data):
+    for settlement in json_data.get("settlement", []):
+        slug_city = slugify(settlement.get("name", ""))
+        if slug_city == settlement_name:
+            return {
+                "id": settlement.get("id"),
+                "city": settlement.get("name")
+            }
+    return None
 
-# PannonWork
-
-pw_url = "https://szovetkezet.pannonwork.hu/-/items/toborzas"
-
-apply_filters = True  
-under_18 = True
-summer_job = True
-
-pw_payload = {
-    "statusz": {"_eq": "aktiv"},
-    "kampanyok": {
-        "kampany_tipus": {"_eq": "allasportal"},
-        "statusz": {"_eq": "aktiv"}
-    },
-    "_and": [
-        {"lokacio": {"megye": {"_eq": "Budapest (főváros)"}}},
-        {},
-        {},
-        {"kampanyok": {"munka_tipusa": {"_in": ["diakmunka"]}}}
-    ]
-}
-
-if apply_filters:
-    filter_ids = []
-    if under_18 and summer_job:
-        filter_ids.extend(("1e62bd20-a494-4d24-a2fb-3f8754a58566", "bca3602c-7b71-47b9-a0e3-389262462a82"))
-    elif under_18:
-        filter_ids.append("bca3602c-7b71-47b9-a0e3-389262462a82")
-    else:
-        filter_ids.append("1e62bd20-a494-4d24-a2fb-3f8754a58566")
-    pw_payload["_and"].append({
-        "cimkek": {"cimke_id": {"_in": filter_ids}}
-    })
-
-pw_response = requests.get(pw_url, params={"filter": json.dumps(pw_payload)})
-
-if pw_response.status_code == 200:
-    pw_data = pw_response.json()
-    pw_jobs = pw_data.get("data", [])
-    for job in pw_jobs:
-        title = job.get("pozicio_neve", "N/A")
-        city = job.get("telepules_szabad", "N/A")
-        payment = job.get("berezes_megjeleno", "N/A")
-        job_listings.append({
-            "Job Title": title,
-            "City": city,
-            "Payment": payment,})
-    print(job_listings)
-else:
-    print(f"Request failed with status code: {pw_response.status_code}")
-
-# MeloDiak
-md_url = "https://web-api.melodiak.hu/v1/job-advertisement"
-
-md_payload = {
-    "page": 1,
-    "sort": "-recent",
-    "_": "1739657308023"
-}
-
-def add_filter(payload, city=None, label=None):
-    if city:
-        payload["filter[city]"] = city
-    if label:
-        payload["filter[label]"] = label
-    return payload
-
-city_filter = "budapest"  # Set to None if no city filter is needed
-label_filter = "nyari-munkak|18-alatt-is-vegezheto-munkak"  # Set to None if no label filter is needed
-
-payload = add_filter(md_payload, city=city_filter, label=label_filter)
-
-response = requests.get(md_url, params=payload)
+def fetch_jobs():
+    global job_listings
     
-if response.status_code == 200:
-    data = response.json()
-    jobs = data.get("data", {}).get("resource", [])
+    # FurgeDiak
+    fg_url = "https://www.furgediak.hu/furgediak-backings/methods/jobAdvertisementControl/findJobAdvertisementByParameter"
+    settlement_url = "https://www.furgediak.hu/furgediak-backings/methods/employeeUserControl/getComboData"
 
-    for job in jobs:
-        title = job.get("title", "N/A")
-        city = job.get("city_name", "N/A")
-        payment = job.get("payment", "N/A")
-        job_listings.append({
-            "Job Title": title,
-            "City": city,
-            "Payment": payment
+    settlement_payload = {
+        "comboNames": {
+            "types": [
+                "staticJobArea", "jobArea", "country", "county", "settlement","office", "typesOfRoad", "specialization", "language", "skill","countryCode", "serviceProviderNumber", "mekiSettlement","mekiCounty", "mekiOffice"
+            ]
+        }
+    }
+
+    headers = {
+        "Referer": "https://www.furgediak.hu/diakmunka"
+    }
+
+    settlement_response = requests.post(settlement_url, headers=headers, json=settlement_payload)
+
+    print(user_inputs)
+    settlement_return = None
+
+    if settlement_response.status_code == 200 and user_inputs.get("City"):
+        print("Success")
+        settlement_data = settlement_response.json()
+        settlement_return = get_city_id(user_inputs["City"], settlement_data)
+
+    county_mapping = {"baranya": 1, "bekes": 2, "bacs-kiskun": 3, "borsod-abaauj-zemplen": 4, "budapest": 5, "csongrad": 6, "fejer": 7, "gyor-moson-sopron": 8, "hajdu-bihar": 9, "heves": 10, "jasz-nagykun-szolnok": 11, "komarom-esztergom": 12, "nograd": 13, "somogy": 14, "szabolcs-szatmar-bereg": 15, "tolna": 16, "vas": 17, "veszprem": 18, "zala": 19}
+    mapped_county = county_mapping.get(user_inputs.get("Region"))
+    
+    job_payload = {
+        "countyId": mapped_county,
+        "jobAreaId": None,
+        "keys": None,  
+        "newJobAdvertisement": False,  
+        "settlementId": settlement_return and settlement_return["id"],
+        "staticJobAreaId": None,  
+        "younger18": False
+    }
+
+    print(job_payload)
+
+    fg_response = requests.post(fg_url, headers=headers, json=job_payload)
+
+    if fg_response.status_code == 200:
+        print("Success!")
+        job_data = fg_response.json()
+        for job in job_data:
+            title = job.get("positionName", "N/A")
+            city = job.get("settlementName", "N/A")
+            payment = job.get("grossSalaryPay", "N/A")
+            job_listings.append({
+                "Job Title": title,
+                "City": city,
+                "Payment": payment,})
+    else:
+        print(f"Failed with status code {fg_response.status_code}")
+
+    # PannonWork
+    pw_url = "https://szovetkezet.pannonwork.hu/-/items/toborzas"
+
+    available_location = False
+    apply_filters = False  
+    under_18 = True
+    summer_job = True
+
+    pw_payload = {
+        "statusz": {"_eq": "aktiv"},
+        "kampanyok": {
+            "kampany_tipus": {"_eq": "allasportal"},
+            "statusz": {"_eq": "aktiv"}
+        },
+        "_and": [
+            {},
+            {},
+            {},
+            {"kampanyok": {"munka_tipusa": {"_in": ["diakmunka"]}}}
+        ]
+    }
+    if user_inputs["Region"] or user_inputs["City"]:
+        available_location = True
+
+    county_slugmapping = {"baranya": "Baranya", "bekes": "Békés", "bacs-kiskun": "Bács-Kiskun", "borsod-abaauj-zemplen": "Borsod-Abaúj-Zemplén", "budapest": "Budapest", "csongrad": "Csongrád", "fejer": "Fejér", "gyor-moson-sopron": "Győr-Moson-Sopron", "hajdu-bihar": "Hajdú-Bihar", "heves": "Heves", "jasz-nagykun-szolnok": "Jász-Nagykun-Szolnok", "komarom-esztergom": "Komárom-Esztergom", "nograd": "Nógrád", "somogy": "Somogy", "szabolcs-szatmar-bereg": "Szabolcs-Szatmár-Bereg", "tolna": "Tolna", "vas": "Vas", "veszprem": "Veszprém", "zala": "Zala"}
+    if available_location:
+        if user_inputs["Region"] == "budapest" or user_inputs["City"] == "budapest":
+            pw_payload["_and"].append({
+                "lokacio": {"megye": {"_eq": "Budapest (főváros)"}}
+            })
+        elif user_inputs["City"]:
+            pw_payload["_and"].append({
+                "lokacio": {"telepules": {"_eq": settlement_return["city"]}}
+            })
+        elif user_inputs["Region"] and not user_inputs["City"]:
+            pw_payload["_and"].append({
+                "lokacio": {"megye": {"_eq": county_slugmapping[user_inputs["Region"]]}}
+            })
+    if apply_filters:
+        filter_ids = []
+        if under_18 and summer_job:
+            filter_ids.extend(("1e62bd20-a494-4d24-a2fb-3f8754a58566", "bca3602c-7b71-47b9-a0e3-389262462a82"))
+        elif under_18:
+            filter_ids.append("bca3602c-7b71-47b9-a0e3-389262462a82")
+        else:
+            filter_ids.append("1e62bd20-a494-4d24-a2fb-3f8754a58566")
+        pw_payload["_and"].append({
+            "cimkek": {"cimke_id": {"_in": filter_ids}}
         })
-else:
-    print(f"Failed to fetch data. Status code: {response.status_code}")
 
-print(job_listings)
+    pw_response = requests.get(pw_url, params={"filter": json.dumps(pw_payload)})
+
+    if pw_response.status_code == 200:
+        pw_data = pw_response.json()
+        pw_jobs = pw_data.get("data", [])
+        for job in pw_jobs:
+            title = job.get("pozicio_neve", "N/A")
+            city = job.get("telepules_szabad", "N/A")
+            payment = job.get("berezes_megjeleno", "N/A")
+            job_listings.append({
+                "Job Title": title,
+                "City": city,
+                "Payment": payment,})
+    else:
+        print(f"Request failed with status code: {pw_response.status_code}")
+
+    # MeloDiak
+    md_url = "https://web-api.melodiak.hu/v1/job-advertisement"
+
+    md_payload = {
+        "page": 1,
+        "sort": "-recent",
+        "_": "1739657308023"
+    }
+
+    def add_filter(payload, city=None, label=None):
+        if city:
+            payload["filter[city]"] = city
+        if label:
+            payload["filter[label]"] = label
+        return payload
+
+    city_filter = user_inputs["City"]  # Set to None if no city filter is needed
+    label_filter = "nyari-munkak|18-alatt-is-vegezheto-munkak"  # Set to None if no label filter is needed
+
+    payload = add_filter(md_payload, city=city_filter, label=label_filter)
+
+    response = requests.get(md_url, params=payload)
+        
+    if response.status_code == 200:
+        data = response.json()
+        jobs = data.get("data", {}).get("resource", [])
+
+        for job in jobs:
+            title = job.get("title", "N/A")
+            city = job.get("city_name", "N/A")
+            payment = job.get("payment", "N/A")
+            job_listings.append({
+                "Job Title": title,
+                "City": city,
+                "Payment": payment
+            })
+    else:
+        print(f"Failed to fetch data. Status code: {response.status_code}")
+
+    print(job_listings)
 
 # Finish GUI
+
 region_label = ctk.CTkLabel(root, text="Region:")
 region_label.pack(pady=(20, 5))
 region_entry = ctk.CTkEntry(root, width=300)
@@ -202,11 +233,10 @@ city_label.pack(pady=(10, 5))
 city_entry = ctk.CTkEntry(root, width=300)
 city_entry.pack(pady=(5, 20))
 
-submit_button = ctk.CTkButton(root, text="Submit")
+submit_button = ctk.CTkButton(root, text="Submit", command=submit)
 submit_button.pack(pady=20)
 
 job_frame = ctk.CTkScrollableFrame(root, width=1300, height=400)
 job_frame.pack(pady=40)
 
-create_table(job_frame,job_listings)
 root.mainloop()
