@@ -11,6 +11,32 @@ root = ctk.CTk()
 root.title("Job Searcher")
 root.geometry("1400x800")
 
+
+def create_table(frame, data):
+    
+    frame.grid_columnconfigure(0, weight=1)  # Job Title column
+    frame.grid_columnconfigure(1, weight=1)  # City column
+    frame.grid_columnconfigure(2, weight=1)  # Payment column
+
+    headers = ["Job Title", "City", "Payment"]
+    for col, header in enumerate(headers):
+        header_label = ctk.CTkLabel(frame, text=header, font=("Arial Bold", 14))
+        header_label.grid(row=0, column=col, padx=5, pady=5, sticky="nsew")
+
+    for row, job in enumerate(data, start=1):
+        title_label = ctk.CTkLabel(frame, text=job["Job Title"], font=("Arial", 12))
+        title_label.grid(row=row, column=0, padx=5, pady=5, sticky="nsew")
+
+
+        display_keys = ["City", "Payment"]
+        for col, key in enumerate(display_keys, start=1):
+            value = job.get(key, "N/A")
+            label = ctk.CTkLabel(frame, text=value, font=("Arial", 12))
+            label.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+
+def submit():
+    print("put something here")
+
 # FurgeDiak
 
 fg_url = "https://www.furgediak.hu/furgediak-backings/methods/jobAdvertisementControl/findJobAdvertisementByParameter"
@@ -43,8 +69,7 @@ if settlement_response.status_code == 200:
                     "city": settlement.get("name")
                 }
         return None
-    user_city = input("Enter the city name: ")
-    settlement_return = get_city_id(user_city, settlement_data)
+    settlement_return = get_city_id("Budapest", settlement_data)
 
 job_payload = {
     "countyId": None,
@@ -71,12 +96,9 @@ if fg_response.status_code == 200:
             "Job Title": title,
             "City": city,
             "Payment": payment,})
-
-    print(job_listings)
 else:
     print(f"Failed with status code {fg_response.status_code}")
 
-print("-----------------------------------------------")
 # PannonWork
 
 pw_url = "https://szovetkezet.pannonwork.hu/-/items/toborzas"
@@ -112,7 +134,6 @@ if apply_filters:
     })
 
 pw_response = requests.get(pw_url, params={"filter": json.dumps(pw_payload)})
-pw_job_listings = []
 
 if pw_response.status_code == 200:
     pw_data = pw_response.json()
@@ -121,15 +142,14 @@ if pw_response.status_code == 200:
         title = job.get("pozicio_neve", "N/A")
         city = job.get("telepules_szabad", "N/A")
         payment = job.get("berezes_megjeleno", "N/A")
-        pw_job_listings.append({
+        job_listings.append({
             "Job Title": title,
             "City": city,
             "Payment": payment,})
-    print(pw_job_listings)
+    print(job_listings)
 else:
     print(f"Request failed with status code: {pw_response.status_code}")
 
-print("-----------------------------------------------")
 # MeloDiak
 md_url = "https://web-api.melodiak.hu/v1/job-advertisement"
 
@@ -152,18 +172,16 @@ label_filter = "nyari-munkak|18-alatt-is-vegezheto-munkak"  # Set to None if no 
 payload = add_filter(md_payload, city=city_filter, label=label_filter)
 
 response = requests.get(md_url, params=payload)
-
-md_job_listings = []
     
 if response.status_code == 200:
     data = response.json()
-    job_listings = data.get("data", {}).get("resource", [])
+    jobs = data.get("data", {}).get("resource", [])
 
-    for job in job_listings:
+    for job in jobs:
         title = job.get("title", "N/A")
         city = job.get("city_name", "N/A")
         payment = job.get("payment", "N/A")
-        md_job_listings.append({
+        job_listings.append({
             "Job Title": title,
             "City": city,
             "Payment": payment
@@ -171,11 +189,24 @@ if response.status_code == 200:
 else:
     print(f"Failed to fetch data. Status code: {response.status_code}")
 
-print(md_job_listings)
-
-print("-----------------------------------------------")
-# ProDiak
-
+print(job_listings)
 
 # Finish GUI
+region_label = ctk.CTkLabel(root, text="Region:")
+region_label.pack(pady=(20, 5))
+region_entry = ctk.CTkEntry(root, width=300)
+region_entry.pack(pady=(5, 10))
+
+city_label = ctk.CTkLabel(root, text="City:")
+city_label.pack(pady=(10, 5))
+city_entry = ctk.CTkEntry(root, width=300)
+city_entry.pack(pady=(5, 20))
+
+submit_button = ctk.CTkButton(root, text="Submit")
+submit_button.pack(pady=20)
+
+job_frame = ctk.CTkScrollableFrame(root, width=1300, height=400)
+job_frame.pack(pady=40)
+
+create_table(job_frame,job_listings)
 root.mainloop()
