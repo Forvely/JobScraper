@@ -236,6 +236,18 @@ city_entry.pack(pady=(5, 20))
 submit_button = ctk.CTkButton(root, text="Submit", command=submit)
 submit_button.pack(pady=20)
 
+check_var_under18 = ctk.StringVar(value="off")
+check_var_summer = ctk.StringVar(value="off")
+
+checkbox_frame = ctk.CTkFrame(root)
+checkbox_frame.pack(pady=(10, 20))
+
+checkbox_under18 = ctk.CTkCheckBox(checkbox_frame, text="Under 18", variable=check_var_under18, offvalue="off", onvalue="on")
+checkbox_under18.grid(row=0, column=1, padx=10)
+
+checkbox_summer = ctk.CTkCheckBox(checkbox_frame, text="Summer job", variable=check_var_summer, offvalue="off", onvalue="on")
+checkbox_summer.grid(row=0, column=2, padx=10)
+
 job_frame = ctk.CTkScrollableFrame(root, width=1300, height=400)
 job_frame.pack(pady=40)
 
