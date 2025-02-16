@@ -5,6 +5,12 @@ import customtkinter as ctk
 import re
 from slugify import slugify
 
+# Create the GUI
+
+root = ctk.CTk()
+root.title("Job Searcher")
+root.geometry("1400x800")
+
 # FurgeDiak
 
 fg_url = "https://www.furgediak.hu/furgediak-backings/methods/jobAdvertisementControl/findJobAdvertisementByParameter"
@@ -170,3 +176,6 @@ print(md_job_listings)
 print("-----------------------------------------------")
 # ProDiak
 
+
+# Finish GUI
+root.mainloop()
