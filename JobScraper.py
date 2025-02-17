@@ -13,16 +13,20 @@ root.geometry("1400x800")
 
 
 def create_table(frame, data):
-    
+    # Clear previous table
+    for widget in frame.winfo_children():
+        widget.destroy()
+
     frame.grid_columnconfigure(0, weight=1)  # Job Title column
     frame.grid_columnconfigure(1, weight=1)  # City column
     frame.grid_columnconfigure(2, weight=1)  # Payment column
 
+    #  Create headers
     headers = ["Job Title", "City", "Payment"]
     for col, header in enumerate(headers):
         header_label = ctk.CTkLabel(frame, text=header, font=("Arial Bold", 14))
         header_label.grid(row=0, column=col, padx=5, pady=5, sticky="nsew")
-
+    # Create the rows for the data
     for row, job in enumerate(data, start=1):
         title_label = ctk.CTkLabel(frame, text=job["Job Title"], font=("Arial", 12))
         title_label.grid(row=row, column=0, padx=5, pady=5, sticky="nsew")
@@ -35,15 +39,20 @@ def create_table(frame, data):
             label.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
 
 user_inputs = {"Region": "", "City": ""}
+filters = [] # 0 = under 18 filter, 1 = summer job filter
 
 def submit():
     user_inputs["Region"] = slugify(region_entry.get())
     user_inputs["City"] = slugify(city_entry.get())
+    under18 = bool(check_var_under18.get())
+    summer = bool(check_var_summer.get())
+    filters.extend((under18,summer))
     fetch_jobs()
-    create_table(job_frame,job_listings)
+    create_table(job_frame, job_listings)
 
 job_listings = []
 
+# We need to get the ID of the city for it to work correctly we get this from a different api the site is using
 def get_city_id(settlement_name, json_data):
     for settlement in json_data.get("settlement", []):
         slug_city = slugify(settlement.get("name", ""))
@@ -55,12 +64,12 @@ def get_city_id(settlement_name, json_data):
     return None
 
 def fetch_jobs():
-    global job_listings
-    
+    job_listings.clear()
     # FurgeDiak
     fg_url = "https://www.furgediak.hu/furgediak-backings/methods/jobAdvertisementControl/findJobAdvertisementByParameter"
+    
+    # Getting the city ID
     settlement_url = "https://www.furgediak.hu/furgediak-backings/methods/employeeUserControl/getComboData"
-
     settlement_payload = {
         "comboNames": {
             "types": [
@@ -82,7 +91,7 @@ def fetch_jobs():
         print("Success")
         settlement_data = settlement_response.json()
         settlement_return = get_city_id(user_inputs["City"], settlement_data)
-
+    # -----------
     county_mapping = {"baranya": 1, "bekes": 2, "bacs-kiskun": 3, "borsod-abaauj-zemplen": 4, "budapest": 5, "csongrad": 6, "fejer": 7, "gyor-moson-sopron": 8, "hajdu-bihar": 9, "heves": 10, "jasz-nagykun-szolnok": 11, "komarom-esztergom": 12, "nograd": 13, "somogy": 14, "szabolcs-szatmar-bereg": 15, "tolna": 16, "vas": 17, "veszprem": 18, "zala": 19}
     mapped_county = county_mapping.get(user_inputs.get("Region"))
     
@@ -93,7 +102,7 @@ def fetch_jobs():
         "newJobAdvertisement": False,  
         "settlementId": settlement_return and settlement_return["id"],
         "staticJobAreaId": None,  
-        "younger18": False
+        "younger18": filters[0]
     }
 
     print(job_payload)
@@ -117,10 +126,9 @@ def fetch_jobs():
     # PannonWork
     pw_url = "https://szovetkezet.pannonwork.hu/-/items/toborzas"
 
-    available_location = False
-    apply_filters = False  
-    under_18 = True
-    summer_job = True
+    available_location = False  
+    under_18 = filters[0]
+    summer_job = filters[1]
 
     pw_payload = {
         "statusz": {"_eq": "aktiv"},
@@ -150,16 +158,15 @@ def fetch_jobs():
             })
         elif user_inputs["Region"] and not user_inputs["City"]:
             pw_payload["_and"].append({
-                "lokacio": {"megye": {"_eq": county_slugmapping[user_inputs["Region"]]}}
+                "lokacio": {"megye": {"_eq": f"{county_slugmapping[user_inputs["Region"]]} (megye)"}}
             })
-    if apply_filters:
-        filter_ids = []
-        if under_18 and summer_job:
-            filter_ids.extend(("1e62bd20-a494-4d24-a2fb-3f8754a58566", "bca3602c-7b71-47b9-a0e3-389262462a82"))
-        elif under_18:
-            filter_ids.append("bca3602c-7b71-47b9-a0e3-389262462a82")
-        else:
-            filter_ids.append("1e62bd20-a494-4d24-a2fb-3f8754a58566")
+    filter_ids = []
+    if under_18 and summer_job:
+        filter_ids.extend(("1e62bd20-a494-4d24-a2fb-3f8754a58566", "bca3602c-7b71-47b9-a0e3-389262462a82"))
+    elif under_18:
+        filter_ids.append("bca3602c-7b71-47b9-a0e3-389262462a82")
+    elif summer_job:
+        filter_ids.append("1e62bd20-a494-4d24-a2fb-3f8754a58566")
         pw_payload["_and"].append({
             "cimkek": {"cimke_id": {"_in": filter_ids}}
         })
@@ -189,17 +196,26 @@ def fetch_jobs():
         "_": "1739657308023"
     }
 
-    def add_filter(payload, city=None, label=None):
+    def add_filter(payload, region=None, city=None, label=None):
+        if region:
+            payload["filter[region]"] = region
         if city:
             payload["filter[city]"] = city
         if label:
             payload["filter[label]"] = label
         return payload
 
-    city_filter = user_inputs["City"]  # Set to None if no city filter is needed
-    label_filter = "nyari-munkak|18-alatt-is-vegezheto-munkak"  # Set to None if no label filter is needed
+    region_filter = user_inputs.get("Region")
+    city_filter = user_inputs.get("City")  # Set to None if no city filter is needed
+    labels = []
+    if filters[0]:
+        labels.append("18-alatt-is-vegezheto-munkak")
+    if filters[1]:
+        labels.append("nyari-munkak")
 
-    payload = add_filter(md_payload, city=city_filter, label=label_filter)
+    label_filter = "|".join(labels) if labels else None
+
+    payload = add_filter(md_payload, region=region_filter, city=city_filter, label=label_filter)
 
     response = requests.get(md_url, params=payload)
         
@@ -219,8 +235,6 @@ def fetch_jobs():
     else:
         print(f"Failed to fetch data. Status code: {response.status_code}")
 
-    print(job_listings)
-
 # Finish GUI
 
 region_label = ctk.CTkLabel(root, text="Region:")
@@ -236,16 +250,16 @@ city_entry.pack(pady=(5, 20))
 submit_button = ctk.CTkButton(root, text="Submit", command=submit)
 submit_button.pack(pady=20)
 
-check_var_under18 = ctk.StringVar(value="off")
-check_var_summer = ctk.StringVar(value="off")
+check_var_under18 = ctk.StringVar(value="")
+check_var_summer = ctk.StringVar(value="")
 
 checkbox_frame = ctk.CTkFrame(root)
 checkbox_frame.pack(pady=(10, 20))
 
-checkbox_under18 = ctk.CTkCheckBox(checkbox_frame, text="Under 18", variable=check_var_under18, offvalue="off", onvalue="on")
+checkbox_under18 = ctk.CTkCheckBox(checkbox_frame, text="Under 18", variable=check_var_under18, offvalue="", onvalue="True")
 checkbox_under18.grid(row=0, column=1, padx=10)
 
-checkbox_summer = ctk.CTkCheckBox(checkbox_frame, text="Summer job", variable=check_var_summer, offvalue="off", onvalue="on")
+checkbox_summer = ctk.CTkCheckBox(checkbox_frame, text="Summer job", variable=check_var_summer, offvalue="", onvalue="True")
 checkbox_summer.grid(row=0, column=2, padx=10)
 
 job_frame = ctk.CTkScrollableFrame(root, width=1300, height=400)
